@@ -1,0 +1,167 @@
+---
+title: "STATS509_HW3"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+
+## Problem 1.(1)
+```{r}
+library(moments)
+XX = read.csv("SP100_daily_03-13.csv", header = TRUE)
+SP100_dl = rev(XX$AdjClose)
+SP100_dl_lreturn = diff(log(SP100_dl))
+summary(SP100_dl_lreturn)
+SP_lr_median = median(SP100_dl_lreturn)
+SP_lr_median
+SP_lr_mean = mean(SP100_dl_lreturn)
+SP_lr_mean
+SP_lr_variance = var(SP100_dl_lreturn)
+SP_lr_variance
+SP_lr_skew = skewness(SP100_dl_lreturn)
+SP_lr_skew
+SP_lr_kurt = kurtosis(SP100_dl_lreturn)
+SP_lr_kurt
+```
+
+From the above result, we can see that the median of log-return is 0.0007256152. The mean of log-return is 0.0001549442, which is close to 0. The variance is 0.0001544697, which means that there isn't big fluctuation in the data. The skewness is -0.2719258, which is close to 0. It may be approximately symmetric. The kurtosis is 14.38892, which means heavy tail compared with kurtosis value, 3, of normal distribution.  
+
+## (2)
+
+```{r}
+library(POT)
+eecdf = ecdf(SP100_dl_lreturn)
+plot(eecdf)
+uv = seq(from = -0.05, to = 0, by = 0.001)
+plot(uv, eecdf(uv),type = 'l', xlab = 'x' ,ylab = 'y', main = 'Empirical CDF of log_returns')
+tcplot(-SP100_dl_lreturn,c(0.01,0.04), nt = 25, conf = 0)
+gpd_fit = fitgpd(-SP100_dl_lreturn, 0.02)
+qq(gpd_fit)
+```
+
+From the above plot, we can see that the value of threshold can be chosen as 0.02. From the QQ-plot, the data points are nearly on the line.      
+
+```{r}
+library(evir)
+gpd_est = gpd(-SP100_dl_lreturn, threshold = 0.02, method = c('ml'), information = c('observed'))
+
+gpd_est$par.ests
+tp = tailplot(gpd_est)
+```
+
+From the fitted plot, we can see that the fit of Generalized Pareto Distribution (GPD for short) to the lower tail of the log returns is well.
+
+## (3)
+
+```{r}
+qnormo = qnorm(0.005,SP_lr_mean,sqrt(SP_lr_variance))
+return_quan = exp(qnormo) - 1
+re_VaR = -return_quan
+re_VaR
+```
+
+The relative VaR at level 0.005 utilizing for the case of fitting normal distribution to log return is 0.03135682.
+
+##(4)
+
+```{r}
+alphat = 1- 0.005/eecdf(-0.02)
+scale = gpd_est$par.ests[2]
+scale
+xi = gpd_est$par.ests[1]
+xi
+m = 0.02
+VaRt = 1- exp(-qgpd(alphat,xi,m,scale))
+VaRt
+```
+
+The relative VaR at level 0.005 utilizing GPD distribution is 0.04749966, which is greater than the result from fitting normal distribution. GPD fits better than normal distribution in the situation of heavy tail. 
+
+## (5)
+
+```{r}
+quant(-SP100_dl_lreturn, p = 0.995, models = 30, ci = FALSE, auto.scale = TRUE, reverse = TRUE, labels = TRUE)
+```
+
+The plot showing how the estimate of a high quantile in the tail of a dataset based on the GPD approximation varies with threshold or number of extremes. From the plot, we can see that the VaR is stable as function of threshold when threshold is less than 0.02.
+
+##(6)
+
+```{r}
+library(evir)
+set.seed(2015)
+niter = 10000
+exp_shortfall = rep(0,niter)
+for (i in 1:niter) {
+  simu_logre = rgpd(length(SP100_dl_lreturn), 0.1599777, mu = 0.02, beta = 0.01116821)
+  simu_re = exp(-simu_logre) - 1
+  below = which(simu_re < -VaRt)
+  exp_shortfall[i] = mean(-simu_re[below])
+}
+mean(na.omit(exp_shortfall))
+```
+
+The estimated shortfall associated with VaR in (d) is 0.06495197 based in one unit portfolio.
+
+## 2(3)
+```{r}
+set.seed(2015)
+mu <- function(port_weight){
+  s <- 0.02*port_weight + 0.03*(1 - port_weight)
+  return(s)
+}
+
+sigma2 <- function(port_weight){
+  s <- (0.03^2) * (port_weight^2) + (0.04^2) * ((1-port_weight)^2)+ 
+    0.03*0.04*port_weight*(1 - port_weight)
+  return(s)
+}
+
+library(VaRES)
+weight = seq(0,1,by = 0.01)
+shortfall = rep(0, length(weight))
+for (i in 1:length(weight)) {
+  shortfall[i] = esnormal(0.005, mu(weight[i]), sqrt(sigma2(weight[i])))
+}
+
+wg = which.max(shortfall)
+-shortfall[wg]
+rVaR3 = -qnorm(0.005,mean = mu(weight[wg]), sd = sqrt(sigma2(weight[wg])))
+VaR3 = 1e6 * rVaR3
+VaR3
+weight[wg]
+```
+
+From the above result, w = 0.69 will minimize the expected shortfall. By minimizing the expected shortfall, we can lower our risk. The VaR is 51507.06 with this portfolio.
+
+## (4)
+
+```{r}
+set.seed(2015)
+quantil = qt(0.005,6)
+w = seq(0,1, by = 0.01)
+tshortfall = rep(0, length(w))
+for (i in 1:length(w)) {
+  tnum = rt(1000000, 6)
+  lambda = sqrt(sigma2(w[i])*4/6)
+  
+  new_port = lambda*tnum + mu(w[i])
+
+  tbelow = which(new_port < lambda * quantil +mu(w[i]))
+  tshortfall[i] = mean(new_port[tbelow])
+}  
+ 
+
+id = which.max(tshortfall)
+w[id]
+VaR4 = -1e6 * (sqrt(sigma2(w[id])*4/6) * quantil + mu(w[id])) 
+VaR4
+```
+
+From the above result, we can see that the value is w is 0.72. And the VaR is 64615.67.
+
+
+
+
+
+

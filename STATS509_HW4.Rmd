@@ -1,0 +1,255 @@
+---
+title: "STATS 509_HW4"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+## Problem 3(a)
+```{r}
+data1 = read.csv("Nasdaq_wklydata_92-12.csv", header = T) 
+data2 = read.csv("SP400Mid_wkly_92-12.csv", header = T) 
+index1 = which(is.na(data1$Adj.Close) == FALSE)
+index2 = which(is.na(data2$Adj.Close) == FALSE)
+nasq = rev(data1$Adj.Close[index1]) 
+sp400 = rev(data2$Adj.Close[index2])
+nasq_lgreturn = diff(log(nasq)) 
+sp400_lgreturn = diff(log(sp400))
+```
+
+After we get log-return, we fit the data with multivariate normal distribution.
+
+```{r}
+mul_vect = cbind(nasq_lgreturn, sp400_lgreturn)
+mean_lgreturn = signif(colMeans(mul_vect))
+cov_lgreturn = signif(cov(mul_vect))
+mean_lgreturn
+cov_lgreturn
+```
+```{r}
+library(copula)
+library(fGarch)
+library(MASS)
+library(fCopulae)
+
+```
+
+
+```{r}
+est.nasq = as.numeric(fitdistr(nasq_lgreturn, "normal")$estimate)
+est.sp400 = as.numeric(fitdistr(sp400_lgreturn, "normal")$estimate)
+dat1 = cbind(pnorm(nasq_lgreturn, mean = est.nasq[1], sd = est.nasq[2]), pnorm(sp400_lgreturn, mean = est.sp400[1], sd = est.sp400[2]))
+ft1 = fitCopula(data = dat1, copula = normalCopula(0.3, dim = 2), optim.method = "BFGS", start = 0.5)
+summary(ft1)
+```
+
+Next, we draw QQ-plot to see the whether fit is good or not.
+
+```{r}
+par(mfrow = c(1,2))
+qqnorm(nasq_lgreturn, main = "Nasdaq-log return")
+qqline(nasq_lgreturn)
+qqnorm(sp400_lgreturn, main = "SP400-log return")
+qqline(sp400_lgreturn)
+```
+
+From the QQ-plot, we can see that there are heavy-tail compared with normal distribution. Next, we draw a plot comparing the empirical vs. theoretical bivariate cumulative distribution function.
+
+```{r}
+u1 = dat1[,1]
+u2 = dat1[,2]
+dem = pempiricalCopula(u1, u2)
+contour(dem$x, dem$y, dem$z, main = "Empirical-Gaussian", col = 'blue', lty = 1, lwd = 2, nlevel = 20)
+cn = normalCopula(ft1@estimate[1], dim = 2, dispstr = "un")
+utdis = rCopula(100000, cn)
+demt = pempiricalCopula(utdis[,1], utdis[,2])
+contour(demt$x, demt$y, demt$z, main = "Gauss", col = 'red', lty = 2, lwd = 2, add = TRUE, nlevel = 20)
+```
+
+From the above plot, we can see that the difference between two cdf functions is obvious. The multivariate normal distribution fit is not very good.
+
+## (b)
+We will use multivariate t distribution to fit the data. First, we find the mean, scale, and degree of freedom.
+Next, we need to convert the data to standard deviation for incorporating within "pstd".
+
+```{r}
+est.nasqt = as.numeric(fitdistr(nasq_lgreturn,"t")$estimate)
+est.sp400t = as.numeric(fitdistr(sp400_lgreturn,"t")$estimate)
+est.nasqt[2] = est.nasqt[2] * sqrt(est.nasqt[3] / (est.nasqt[3]-2))
+est.sp400t[2] = est.sp400t[2] * sqrt(est.sp400t[3] / (est.sp400t[3]-2))
+dat2 = cbind(pstd(nasq_lgreturn, mean = est.nasqt[1], sd = est.nasqt[2], nu = est.nasqt[3]), pstd(sp400_lgreturn, mean = est.sp400t[1], sd = est.sp400t[2], nu = est.sp400t[3]))
+N = length(nasq_lgreturn)
+quantv = (1/N)*seq(0.5, N - 0.5, 1)
+par(mfrow = c(1,2))
+qqplot(sort(nasq_lgreturn), qt(quantv, est.nasqt[3]), main = 'Nasdaq - QQ plot for t-dist')
+abline(lm(qt(c(0.25, 0.75), est.nasqt[3]) ~ quantile(nasq_lgreturn, c(0.25, 0.75))))
+qqplot(sort(sp400_lgreturn), qt(quantv, est.sp400t[3]), main = 'SP400 - QQ plot for t-dist')
+abline(lm(qt(c(0.25, 0.75), est.sp400t[3])~quantile(sp400_lgreturn, c(0.25, 0.75))))
+```
+
+From  QQ plots, we can see that the fitting of t-distribution is better than normal distribution.
+
+```{r}
+cor_tau = cor(nasq_lgreturn, sp400_lgreturn, method = "spearman")
+omega = cor_tau
+cop_t_dim2 = tCopula(omega, dim = 2, dispstr = "un", df = 4)
+ft2 = fitCopula(cop_t_dim2, optim.method = "L-BFGS-B", data = dat2)
+summary(ft2)
+```
+
+The estimation of degree of freedom is 3.8299.
+
+```{r}
+u1 = dat2[,1]
+u2 = dat2[,2]
+dem = pempiricalCopula(u1,u2)
+contour(dem$x, dem$y, dem$z, main = "Empirical-t", col = 'blue', lty = 1, lwd = 2, nlevel = 20)
+ct = tCopula(ft2@estimate[1], dim = 2, dispstr = "un", df = ft2@estimate[2]) 
+utdis = rCopula(100000, ct)
+demt = pempiricalCopula(utdis[,1], utdis[,2])
+contour(demt$x, demt$y, demt$z, main = "t",
+        col = 'red', lty = 2, lwd = 2, add = TRUE, nlevel = 20)
+```
+From the plot, we can see that the estimation is better than the multivariate normal distribution fitting.
+Next, we derive a confidence interval for the degrees of freedom via the method of profile likelihood. 
+
+```{r}
+library(mnormt)
+df = seq(1, 8, 0.01)
+n = length(df)
+loglik_max = rep(0, n)
+for(i in 1:n){
+  fit = cov.trob(mul_vect, nu = df[i])
+  mu = as.vector(fit$center)
+  sigma = matrix(fit$cov, nrow = 2)
+  loglik_max[i] = sum(log(dmt(mul_vect, mean = fit$center, S = fit$cov, df = df[i])))
+  }
+plot(df, loglik_max, xlab = 'nu', ylab = 'Profile-likelihood function')
+nuest = df[which.max(loglik_max)]
+nuest
+position = which((loglik_max[which.max(loglik_max)]-loglik_max) <= 0.5*qchisq(0.95, 1))
+lower_bound = df[position[1]]
+upper_bound = df[position[length(position)]]
+lower_bound
+upper_bound
+```
+
+By using profile likelihood estimation, we get the estimation of degree of freedom is 2.8 with confidence interval [2.44, 3.25].
+
+## (c)
+```{r}
+AIC_gauss = -2*ft1@loglik+2*1
+AIC_t = -2*ft2@loglik+2*2
+AIC_gauss
+AIC_t
+```
+
+Based on AIC criteria, we may choose model with minimized AIC value. So, we need to choose t-distribution fitted model. And from QQ-plot and plot comparing the empirical vs.  theoretical bivariate cumulative distribution function, the t-distribution fitted model is better than normal distribution.
+
+Thus, based on (a) and (b), I prefer the second model. The QQ-plot for the second model is better. And the plot comparing the empirical vs. theoretica also fits better in the second model.
+## (d)
+
+For the model derived in (a), we have
+
+```{r}
+cn = normalCopula(ft1@estimate[1], dim = 2, dispstr = "un")
+uvsim1 = rCopula(1000000, cn)
+data_sim1 = cbind(qnorm(uvsim1[,1], mean = est.nasq[1], sd = est.nasq[2]),qnorm(uvsim1[,2], mean = est.sp400[1], sd = est.sp400[2]))
+data1 = 0.5 *data_sim1[,1] + 0.5 * data_sim1[,2]
+VaR1 = -quantile(data1, 0.001) * 10^7
+VaR1
+```
+
+The VaR is 886358.7.
+
+For the model derived in (b), we have
+```{r}
+uvsim = rCopula(1000000, ct)
+data_sim = cbind(qstd(uvsim[,1], mean = est.nasqt[1], sd = est.nasqt[2], nu = est.nasqt[3]), qstd(uvsim[,2], mean = est.sp400t[1], sd = est.sp400t[2], nu = est.sp400t[3]))
+datat = 0.5 *data_sim[,1] + 0.5 * data_sim[,2]
+VaR = -quantile(datat, 0.001) * 10^7
+VaR
+```
+
+The VaR is 1591786.
+
+## (e)
+
+```{r}
+set.seed(2015)
+ct = tCopula(ft2@estimate[1], dim = 2, dispstr = "un", df = ft2@estimate[2])
+uvsim = rCopula(100000, ct)
+w = seq(0, 1, 0.01)
+n = length(w)
+VaRv = rep(0, n)
+expected_return = rep(0,n)
+varian=rep(0,n)
+data_sim = cbind(qstd(uvsim[,1], mean = est.nasqt[1], sd = est.nasqt[2], nu = est.nasqt[3]),qstd(uvsim[,2], mean = est.sp400t[1], sd = est.sp400t[2], nu = est.sp400t[3]))
+for(i in 1:n)
+{
+  datat = w[i]*data_sim[,1]+(1-w[i])*data_sim[,2]
+  VaRv[i] = -quantile(datat,0.002)
+  expected_return[i] = mean(datat)
+  varian[i] = sd(nasq_lgreturn)^2*w[i]^2+sd(sp400_lgreturn)^2*(1-w[i])^2+2*sd(nasq_lgreturn)*sd(sp400_lgreturn)*cor(nasq_lgreturn,sp400_lgreturn)*w[i]*(1-w[i])
+}
+# Maximun expected return
+w_exp = w[which.max(expected_return)]
+expected_final = expected_return[which.max(expected_return)]*1e7
+w_exp
+expected_final
+# Minimum volatility
+w_var = w[which.min(varian)]
+var_final = varian[which.min(varian)]
+w_var
+var_final
+# Minimum VaR at q = 0.002
+w_VaR = w[which.min(VaRv)]
+VaR_final = VaRv[which.min(VaRv)]*1e7
+w_VaR
+VaR_final
+```
+For Multivariate t-distribution: According to the result, w for maximum expected return is 1 and corresponding expected return is 34391.31. w for min volatility is 0 and corresponding variance is 0.0007528559. w for min VaR is 0.045 and corresponding VaR is 1228242.
+
+```{r}
+set.seed(2015)
+uvsim = rCopula(100000, cn)
+w = seq(0, 1, 0.01)
+n = length(w)
+VaRv = rep(0, n)
+expected_return = rep(0,n)
+varian=rep(0,n)
+data_sim2 = cbind(qnorm(uvsim[,1], mean = est.nasq[1], sd = est.nasq[2]),qnorm(uvsim[,2], mean = est.sp400[1], sd = est.sp400[2]))
+for(i in 1:n)
+{
+  datat = w[i]*data_sim2[,1]+(1-w[i])*data_sim2[,2]
+  VaRv[i] = -quantile(datat,0.002)
+  expected_return[i] = mean(datat)
+  varian[i] = sd(nasq_lgreturn)^2*w[i]^2+ sd(sp400_lgreturn)^2*(1-w[i])^2+2*sd(nasq_lgreturn)*sd(sp400_lgreturn)*cor(nasq_lgreturn,sp400_lgreturn)*w[i]*(1-w[i])
+}
+# Maximun expected return
+w_exp = w[which.max(expected_return)]
+expected_final = expected_return[which.max(expected_return)]*1e7
+w_exp
+expected_final
+# Minimum volatility
+w_var = w[which.min(varian)]
+var_final = varian[which.min(varian)]
+w_var
+var_final
+# Minimum VaR at q = 0.002
+w_VaR = w[which.min(VaRv)]
+VaR_final = VaRv[which.min(VaRv)]*1e7
+w_VaR
+VaR_final
+```
+
+For Multivariate normal-distribution: According to the result, w for maximum expected return is 0 and corresponding expected return is 18275.44. w for min volatility is 0 and corresponding variance is 0.0007528559. w for min VaR is 0.017 and corresponding VaR is 777184.3.
+
+
+
+
+
+
+
+
+
+

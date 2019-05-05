@@ -1,0 +1,95 @@
+---
+title: "Homework 1"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+## 3.(a)
+```{r}
+dat = read.csv("Nasdaq_daily_Jan1_2012_Dec31_2017.csv", header = TRUE)
+n = dim(dat)[1]
+time = 1:n
+log_return =log(dat$Adj.Close[2:n]/dat$Adj.Close[1:(n-1)])
+plot(time, dat$Adj.Close,xlab = "Date", ylab = "adjusted closing price", type = 'l',main = "adjusted closing price")
+plot(time[1:(n-1)],log_return,xlab = "Date", ylab = "log_return", type = 'l', main = "log_return")
+```
+From the plots, we can see that there is increasing in the adjusted closing price. And there are fluctuations in the log-return. The volatility is in range of -0.04 to 0.04, which is not big.
+
+## (b)
+```{r}
+library(fBasics)
+skewness(log_return)
+kurtosis(log_return)
+par(mfrow = c(1,2))
+hist(log_return,xlab = "Date", ylab = "log_return", main = "Histogram of log_return")
+boxplot(log_return, ylab = "log_return", main = "Log_return")
+```
+The skewness is -0.4036703, which means it is not symmetric. The kurtosis is 2.002712, which means it has heavy tail compared with normal distribution. We can also see the heavy-tail trend from the histogram and boxplot. In the boxplot, there are many outliers, which shows the big possibility of having big gain or loss. 
+
+## (c)
+From the above result, we can see that the kurtosis of log_return is 2.002712. It is greater than 0 in terms of normal distribution. So the log_return has heavy-tail relevant to normal distribution. It is more possible for the investors to gain large return or suffer big loss compared with normal distribution. On the other hand, the kurtosis of double exponential distribution is 3. So the heavy_tail of log_return is not as big as double exponential distribution. The risk is not that big.
+
+## Problem 12
+```{r}
+data = read.csv("MCD_PriceDaily.csv")
+adjprice = data[,7]
+m = dim(data)[1]
+Date = 1:m
+mcd_returns = adjprice[2:m]/adjprice[1:(m-1)] - 1
+mcd_logre = log(adjprice[2:m]/adjprice[1:(m-1)])
+plot(mcd_returns,mcd_logre,xlab = "returns", ylab = "lor-returns",main = "log-returns against returns")
+```
+From the plot, we can see that it is reasonable to say the returns and log-returns are approximately equal.
+
+## Problem 13
+
+```{r}
+m1 = mean(mcd_returns)
+m1
+m2 = mean(mcd_logre)
+m2
+sd1 = sd(mcd_returns)
+sd1
+sd2 = sd(mcd_logre)
+sd2
+```
+Actually, the two variables are slight different with each other.
+
+## Problem 16
+
+```{r}
+set.seed(2015)
+niter = 10000
+below = rep(0,niter)
+for (i in 1:niter) {
+  r = rnorm(20, mean = 0.0004630553, sd = 0.008901467)  
+  logprice = log(93.07) + cumsum(r)
+  minlogP = min(logprice)
+  below[i] = as.numeric(minlogP < log(85))
+}
+prob = sum(below)/10000
+gain = 100*prob - (1-prob)
+gain
+```
+The gain in long run is 0.0605, which is greater than 0. So, I am willing to make the bet.
+
+## Problem 17
+```{r}
+set.seed(2015)
+niter1 = 10000
+below1 = rep(0,niter1)
+below2 = rep(0,niter1)
+for (i in 1:niter1) {
+  r = rnorm(20, mean = 0.0004630553, sd = 0.008901467)  
+  logprice = log(93.07) + cumsum(r)
+  minlogP = min(logprice)
+  below1[i] = as.numeric(log(84.5) < minlogP & minlogP < log(85))
+  below2[i] = as.numeric(minlogP < log(84.5))
+}
+gain = (100*sum(below1) + 125*sum(below2) - (10000-sum(below1)-sum(below2)))/10000
+gain
+```
+I am even more willing to make the bet.

@@ -1,0 +1,137 @@
+---
+title: "STATS509_HW6"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+
+##1.(a)
+
+```{r}
+library(Ecdat)
+data("CRSPday")
+crsp = CRSPday[,7]
+acf(crsp)
+acf(as.numeric(crsp))
+```
+
+(a)From the plot of crsp, we can see that the lag is based on the unit of year. From the plot of as.numeric crsp, the lag is based on number of days, which is discreted by function as.numeric. Since the measure of lag is different, the plots differ between each other.
+
+(b)The values of lag are 1, 7, 16, and 27, which are significant autocorrelations in the CRSP returns. Since the level is 5%, there are 5% * 35 = 1.75 values might be due to chance. Thus lag = 27 and lag = 16 may deu to chance.
+
+## 2.(a)
+
+```{r}
+data1 = read.csv("Nasdaq_wklydata_92-12.csv", header = TRUE)
+data2 = read.csv("SP400Mid_wkly_92-12.csv", header = TRUE)
+index1 = which(is.na(data1$Adj.Close) == FALSE)
+index2 = which(is.na(data2$Adj.Close) == FALSE)
+nasdaq_data = rev(data1$Adj.Close[index1])
+sp400_data = rev(data2$Adj.Close[index2])
+nas_log_ret = diff(log(nasdaq_data))
+nas_return = exp(nas_log_ret) - 1
+sp400_log_ret = diff(log(sp400_data))
+sp400_return = exp(sp400_log_ret) - 1
+
+autocorrelation <- function(dat){
+  n = length(dat)
+  m = mean(dat)
+  covariance = rep(0,(2*(n-1) +1))
+  for (lag in 0:(n-1)) {
+    s = 0
+    for (i in 1:(n-lag)) {
+      s = s + (dat[i] - m) * (dat[i+lag] - m)
+    }
+    covariance[lag+n] = s/n
+  }
+  for (lag in (-(n-1)):-1) {
+    covariance[lag+n] = covariance[-lag+n]
+  }
+  correlation = covariance / covariance[n]
+  return(correlation)
+}
+
+nas_xlab = seq(1 - length(nas_return), length(nas_return) - 1, by = 1) 
+nas_ylab = autocorrelation(nas_return)
+plot(nas_xlab, nas_ylab, type = 'l')
+```
+
+From the Nasdaq weekly return plot we can see that the bigger time lag between two weeks, the smaller correlation between the two weekly returns. There is a tendency that the less time lag, the more correlation between weekly returns, i.e., the closer two weeks, the greater relationship between their returns. Only correlation at x = 0 has the value 1, and at the other points the values are less than 0.1, which means that there is actually slight relationship between returns from different weeks.
+
+
+```{r}
+sp400_xlab = seq(1 - length(sp400_return), length(sp400_return) - 1, by = 1) 
+sp400_ylab = autocorrelation(sp400_return)
+plot(sp400_xlab, sp400_ylab, type = 'l')
+```
+
+We can get similar result from SP400 weekly return, i.e., when the time lag between two weeks are small, there exists correlation between two weeks returns. And when the lag is big, there is nearly no relation between two weeks returns. Except zero point, the other correlation values are less than 0.1, which means that there is slight relation between different week returns even if they are close with each other.
+
+## (b)
+
+
+```{r}
+Box.test(nas_return, lag = 10, type = "Ljung")
+acf(as.vector(nas_return), lag = 20, main  = 'nasdaq')
+```
+
+From the ACF plot about Nasdaq weekly return, we can see that when lag are 5 and 7, values of ACF are outside the boundary. And in the Box-test, when the lag is 10, the p-value is 0.009455. Both of the results show that it is not white noise. 
+
+```{r}
+Box.test(sp400_return, lag = 15, type = "Ljung")
+acf(as.vector(sp400_return), lag = 20, main  = 'sp400')
+```
+
+From the ACF plot about SP400 weekly return, we can see that when lag are 12 and 15, the values of ACF are outside the boundary. And in the Box-test, when lag is 15, the p-value is 0.01105. Both of these two results show that it is not white noise. 
+
+Thus we can reject the null hypothesis. The weekly returns of Nasdaq and SP400 are not white noise.
+
+
+## (c)
+
+```{r}
+abs_nas_ret = abs(nas_return)
+abs_nas_xlab = nas_xlab
+abs_nas_ylab = autocorrelation(abs_nas_ret)
+plot(abs_nas_xlab, abs_nas_ylab, type = 'l')
+```
+
+When we take absolute value to the Nasdaq weekly return, their values become positive. We can see that the tendency of the plot is more dramatic, and absolute values of correlation are bigger compared with plot in (a). When the time lag between two weeks are small, e.g., within 50 weeks, their correlation is more than 0.2. Based on that, we may deduce that when the absolute value of return is large, no matter what their signs are, the absolute value of return is probably large in the near weeks. 
+
+
+```{r}
+abs_sp400_ret = abs(sp400_return)
+abs_sp400_xlab = sp400_xlab
+abs_sp400_ylab = autocorrelation(abs_sp400_ret)
+plot(abs_sp400_xlab, abs_sp400_ylab, type = 'l')
+```
+
+We can get similar result from SP400 weekly return. After taking absolute value, the tendency is more dramatic compared with the plot in (a). Within a few weeks, there may exist dependence between magnitude of absolute returns. The correlation tends to zero when the lag is large.
+
+## (d)
+```{r}
+nas_value_xlab = seq(1 - length(nasdaq_data), length(nasdaq_data) - 1, by = 1) 
+nas_value_ylab = autocorrelation(nasdaq_data)
+plot(nas_value_xlab, nas_value_ylab, type = 'l')
+abline(h = 0)
+```
+
+From the plot of sample auto-correlation functions of the actual price data for Nasdaq, we know that when the time lag is small, e.g., within 10 weeks, the correlation is greater than 0.8. In this situation, there is strong correlation between actual price in different weeks. From the whole plot, there are fluctuations even the lag is big, which means that there still exist relationship between actual price in two far away weeks. We cannot see that the sample ACF will decay to zero at last. This is a sign of either nonstationarity or possibly of stationarity with long-memory dependence.
+
+
+```{r}
+sp400_value_xlab = seq(1 - length(sp400_data), length(sp400_data) - 1, by = 1) 
+sp400_value_ylab = autocorrelation(sp400_data)
+plot(sp400_value_xlab, sp400_value_ylab, type = 'l')
+abline(h = 0)
+```
+
+We can get similar results from the SP400 plot. In the near weeks, there are strong correlations between actual prices in two different weeks. Even when the time lag is big, there still exist relation between actual price in different weeks. The plot has fluctuations in correlation between actual prices based on the time lag axis. We cannot see that the sample ACF will decay to zero at last. This is a sign of either nonstationarity or possibly of stationarity with long-memory dependence. 
+
+
+
+
+
+
+
+

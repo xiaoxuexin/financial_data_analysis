@@ -1,0 +1,103 @@
+---
+title: "STATS509_HW9"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+
+## (a)
+
+```{r}
+dat = read.csv("NASDAQ_Wkly_Jan1_2012_Dec31_2015.csv", header = T) 
+index = which(is.na(dat$Adj.Close) == FALSE)
+nasdaq = rev(dat$Adj.Close[index]) 
+nasdaq.ts = ts(data = nasdaq, start = c(2012,1), frequency = 52)
+log_nasdaq = log(nasdaq)
+log_nasdaq.ts = ts(data = log_nasdaq, start = c(2012,1), frequency = 52)
+plot(log_nasdaq.ts)
+log_return = diff(log_nasdaq)
+log_return.ts = ts(log_return, start = c(2012,1), frequency = 52)
+plot(log_return.ts)
+abline(h = 0)
+acf(log_nasdaq.ts, lag = 10)
+acf(log_return.ts, lag = 10)
+```
+
+From the logarithm of the adjusted closing price plot, we can see that the log price is increasing over time. From the plot of log return, we can see that log return maybe weak stationary. From the acf of log price, we can see that there exist correlation between different log prices. It is not stationary. From the acf of log return, the log returns are uncorrelated.
+
+
+
+## (b)
+
+
+```{r}
+library(forecast)
+fit = auto.arima(log_nasdaq.ts, max.p = 3, max.q = 3, seasonal = FALSE , ic = c('aic'), stepwise = FALSE)
+summary(fit)
+```
+
+From the result, we can see that the chosen model is ARIMA(1,1,1) with aic = -1062.82. The first order difference is enough to make the model stationary. Thus, the log return is stationary. 
+
+```{r}
+tsdiag(fit)
+qqnorm(fit$residuals)
+qqline(fit$residuals)
+```
+
+The diagnostic results are shown above. The standard residuals seem like white noise. The acf plot shows that there is no autocorrelation between different residuals. The p-value in Ljung-Box is large and we cannot reject null hypothesis, i.e., residuals maybe white noise.
+
+From the qq-plot, we can see that the right side seems like normal distribution. But left side is heavy tail compared with normal distribution, which means that there may exist unexpected losses compared with normal distribution.
+
+
+## (c)
+
+```{r}
+forecasts = forecast(fit, h = 10)
+plot(nasdaq.ts, xlim = c(2012,2016), ylim = c(2500,6000))
+lines(seq(from = 2016, by = 1/52, length = 10),exp(forecasts$mean), col = 'red')
+lines(seq(from = 2016, by = 1/52,  length = 10), exp(forecasts$upper[,2]), col = 'blue')
+lines(seq(from = 2016, by = 1/52,  length = 10), exp(forecasts$lower[,2]), col = 'blue')
+```
+
+The plot of 10-step ahead prediction and 95% prediction intervals are shown above.
+
+## (d)
+
+
+```{r}
+net_return = exp(log_return) - 1
+fit2 = arima(log_return, order = c(1,0,1))
+forecasts2 = forecast(fit2, 10)
+net_return.ts = ts(net_return, start = c(2012,1), frequency = 52)
+plot(net_return.ts, xlim = c(2015.5,2016.3))
+lines(seq(from = 2016, by = 1/52, length = 10), exp(forecasts2$mean)-1, col = 'red')
+lines(seq(from = 2016, by = 1/52, length = 10), exp(forecasts2$upper[,2])-1, col = 'blue')
+lines(seq(from = 2016, by = 1/52, length = 10), exp(forecasts2$lower[,2])- 1, col = 'blue')
+```
+
+The plot of the 10-step ahead prediction on Net Returns of NASDAQ with 95% prediction intervals are shown above.
+
+## (e)
+
+```{r}
+N = 10000
+set.seed(345) 
+log_return2 = rep(0,N) 
+for (i in 1:N){
+log_price.sim = arima.sim(list(order = c(1,1,1), ar = -0.8588, ma = 0.7577), n = 2, sd = sqrt(0.0003453)) + 0.003
+log_return2[i] = log_price.sim[3]-log_price.sim[2] }
+VaR = -(exp(quantile(log_return2, 0.005))-1)
+VaR
+```
+
+We find that the relative VaR for alpha = 0.005 for two weeks ahead is 0.04732919. From the diagnostic in (b), the the left side is heavy tail compared with normal distribution, so the true value maybe larger than our result. 
+
+
+
+
+
+
+
+
+
+

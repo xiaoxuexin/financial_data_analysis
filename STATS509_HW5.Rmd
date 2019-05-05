@@ -1,0 +1,138 @@
+---
+title: "STATS509_HW5"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+
+## 2.
+
+```{r}
+data1 = read.csv("Nasdaq_wklydata_92-12.csv", header = T) 
+data2 = read.csv("SP400Mid_wkly_92-12.csv", header = T) 
+index1 = which(is.na(data1$Adj.Close) == FALSE)
+index2 = which(is.na(data2$Adj.Close) == FALSE)
+nasq = rev(data1$Adj.Close[index1]) 
+sp400 = rev(data2$Adj.Close[index2])
+nasq_lgreturn = diff(log(nasq)) 
+sp400_lgreturn = diff(log(sp400))
+library(MASS)
+est.nasq = as.numeric(fitdistr(nasq_lgreturn, "t")$estimate)
+est.sp400 = as.numeric(fitdistr(sp400_lgreturn, "t")$estimate)
+est.nasq
+est.sp400
+est.nasq[2] = est.nasq[2]*sqrt(est.nasq[3]/(est.nasq[3]-2))
+est.sp400[2] = est.sp400[2]*sqrt(est.sp400[3]/(est.sp400[3]-2))
+```
+
+By fitting separate t-distribution via MLE, we know that the mean, scale, and degree of freedom for Nasdaq is 0.003350693, 0.023018961, and 3.674359674. The mean, scale, and degree of freedom for SP400 is 0.003084286, 0.018450673, and 3.472334968.
+
+
+
+```{r}
+library(Ecdat)
+library(copula)
+library(fGarch)
+library(fCopulae)
+
+omega = cor(nasq_lgreturn, sp400_lgreturn, method = "spearman")
+n = length(nasq_lgreturn)
+data1 = cbind(pstd(nasq_lgreturn, mean = est.nasq[1], sd = est.nasq[2], nu = est.nasq[3]),pstd(sp400_lgreturn, mean = est.sp400[1], sd = est.sp400[2], nu = est.sp400[3]))
+cop_t_dim2 = tCopula(omega, dim = 2, dispstr = "un", df = 4)
+ft = fitCopula(cop_t_dim2, optim.method = "L-BFGS-B", data = data1)
+ft
+```
+
+
+
+```{r}
+u1 = data1[,1]
+u2 = data1[,2]
+dem = pempiricalCopula(u1,u2)
+contour(dem$x, dem$y, dem$z, main = "Empirical-t", col = 'blue', lty = 1, lwd = 2, nlevel = 20)
+ct = tCopula(ft@estimate[1], dim = 2, dispstr = "un", df = ft@estimate[2]) 
+utdis = rCopula(100000, ct)
+demt = pempiricalCopula(utdis[,1], utdis[,2])
+contour(demt$x, demt$y, demt$z, main = "t",
+        col = 'red', lty = 2, lwd = 2, add = TRUE, nlevel = 20)
+```
+
+From the above result, we can see that the correlation is rho = 0.8883, and the degree of freedom is df = 3.8299. Comparing with the cdf from last homework, we can find that the fit by t-copula is better on tails than last time. We can also see the AIC.
+
+```{r}
+AIC_t_copula = -2 * ft@loglik + 2*2 - 2*fitdistr(nasq_lgreturn,"t")$loglik - 2*fitdistr(sp400_lgreturn,"t")$loglik
+AIC_t_copula
+AIC_t_ple = -2*5549.806 + 2*6
+AIC_t_ple
+```
+
+Comparing the AIC in the two models, we can see that the cdf plot in this homework is better than last time. But the AIC criterion shows that last time result is better. Thus, we can use both methods to fit the data.
+
+## 3.(a)
+
+
+```{r}
+set.seed(12345678)
+ct = tCopula(ft@estimate[1], dim = 2, dispstr = "un", df = ft@estimate[2])
+N = 1000000
+uvsim = rCopula(N, ct)
+w = seq(-1,0.5,0.01)
+n = length(w)
+VaRv = rep(0,n)
+exp_shortfall = rep(0,n)
+varian = rep(0,n)
+data_sim = cbind(qstd(uvsim[,1], mean = est.nasq[1], sd = est.nasq[2], nu = est.nasq[3]), qstd(uvsim[,2], mean = est.sp400[1], sd = est.sp400[2], nu = est.sp400[3]))
+for (i in 1:n) {
+  datat = w[i] *data_sim[,1] + (1-w[i])*data_sim[,2]
+  VaRv[i] = 1-exp(quantile(datat, 0.005))
+  varian[i] = var(datat)
+  below = which((exp(datat)  - 1) < -VaRv[i])
+  exp_shortfall[i] = mean(exp(datat[below]) - 1)
+}
+plot(w, VaRv, xlab = 'w', ylab = 'VaR', main = 'VaR vs w')
+
+plot(w, varian, xlab = 'w', ylab = 'variance', main = 'volatility vs w')
+
+wmax = w[which.min(VaRv)]
+wmax
+
+VaR = VaRv[which.min(VaRv)]
+VaR
+exp_shf = exp_shortfall[which.min(VaRv)]
+-exp_shf
+
+wmin = w[which.min(varian)]
+wmin
+min_variance = varian[which.min(varian)]
+min_variance
+
+```
+
+The portfolio is -0.16 Nasdaq and 1.16 SP400 that minimizes VaR at the q=0.005 level. The corresponding VaR is 0.08606216. The expected shortfall for this portfolio is 0.1211164.
+
+## (b)
+
+The portfolio is -0.22 Nasdaq and 1.22 SP400 that has minimum variance. The corresponding minimum variance is 0.0007938257.
+
+## (c)
+
+```{r}
+count = 0
+VaR_1 = 1 - exp(quantile(data_sim[,1], 0.003))
+VaR_2 = 1 - exp(quantile(data_sim[,2], 0.003))
+for (i in 1:N) {
+  if(exp(data_sim[i,1]) - 1 < -VaR_1 & exp(data_sim[i,2]) - 1 < -VaR_2){
+    count = count + 1
+  }
+}
+count/N
+```
+
+The probability is 0.1877%.
+
+
+
+
+
+
+

@@ -1,0 +1,114 @@
+---
+title: "STATS509_HW10"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+## 1.(1)
+
+```{r}
+DATA = read.csv("NYA-2015-2017.csv", header = TRUE)
+NYSE_lret = diff(log(DATA$Adj.Close))
+NYSE_lret.ts = ts(data = NYSE_lret, start = c(2015,1), frequency = 252, names = c('logret'))
+library(fGarch)
+model = garchFit(formula = ~ garch(1,1), data = NYSE_lret.ts)
+summary(model)
+lambda = 1.752e-01 + 7.800e-01
+1 - log(2)/log(lambda)
+```
+
+The standard error of αo, α1, β1 are 9.672e-07, 3.761e-02, and 4.316e-02. We take k, half life of volatility, to be 17.
+
+## (2)
+
+
+```{r}
+plot(volatility(model), type = 'l')
+plot(model@residuals, type = 'l')
+```
+
+## (3)
+
+
+```{r}
+qqnorm(model@residuals/model@sigma.t)
+qqline(model@residuals/model@sigma.t)
+```
+
+From the plot, we can see that the residuals are heavy tail compared with normal distribution. Jarque-Bera test and Shapiro-Wilk test also shows that. We may choose t-distribution or skewed t-distribution to improve the model.
+
+
+## (4)
+
+```{r}
+library(MASS)
+res_fit = fitdistr(model@residuals/model@sigma.t, "t", start = list(m=mean(model@residuals/model@sigma.t,na.rm=TRUE),s=sd(model@residuals/model@sigma.t,na.rm=TRUE), df=5), lower=c(-1, 0.001,1))
+N = length(model@residuals)
+quantv = (1/N)*seq(.5,N-.5,1)
+qqplot(qt(quantv, res_fit$estimate[3]), model@residuals/model@sigma.t, main = 'qq plot for t-dist on residuals')
+qqline(model@residuals/model@sigma.t, distribution = function(p) qt(p,res_fit$estimate[3]), probs = c(0.1, 0.9), col = 2)
+```
+
+From the plot, we can see that the fit by t-distribution is lighter tail on the right and heavy tail on the left compared with t-distribution.
+
+## 2.
+
+```{r}
+nuest = res_fit$estimate[3]
+forecasts = predict(model, n.ahead = 5)
+VaR_norm = 1-exp(qnorm(0.005, forecasts$meanForecast, forecasts$standardDeviation))
+VaR_t = 1-exp(forecasts$meanForecast+forecasts$standardDeviation*sqrt(nuest-2/nuest)*qt(0.005,nuest))
+VaR_norm
+VaR_t
+```
+
+If the residuals are normal distribution, the relative VaR is 0.01308601, but if residuals are t-distribution, relative VaR is 0.01570865, which is larger. Since from previous question, we know t-distribution is better at fitting left tails, we trust more on the second result.
+
+## 3(1)
+
+```{r}
+summary(garchFit(~arma(1,0)+garch(1,1),data = NYSE_lret.ts,cond.dist = 'norm'))
+summary(garchFit(~arma(2,0)+garch(1,1),data = NYSE_lret.ts,cond.dist = 'norm'))
+summary(garchFit(~arma(3,0)+garch(1,1),data = NYSE_lret.ts,cond.dist
+= 'norm'))
+summary(garchFit(~arma(1,0)+garch(1,1),data = NYSE_lret.ts,cond.dist
+= 'std'))
+summary(garchFit(~arma(2,0)+garch(1,1),data = NYSE_lret.ts,cond.dist
+= 'std'))
+summary(garchFit(~arma(3,0)+garch(1,1),data = NYSE_lret.ts,cond.dist
+= 'std'))
+```
+
+Based on the result, the AR(1) + GARCH(1,1) model with normally distributed innovation and the AR(2) + GARCH(1,1) model with t-distributed innovation fits best. Based on the AIC criteria, the AR(2) + GARCH(1,1) model with t-distributed innovation is better.
+
+```{r}
+model3 = garchFit(~arma(2,0)+garch(1,1),data = NYSE_lret.ts,cond.dist = 'std')
+qqplot(qt(quantv,model3@fit$matcoef[7]),model3@residuals / model3@sigma.t, main = 'QQ plot for t-dist on residuals',xlab = 'Theoretical Quantiles',ylab = 'Sample Quantiles') 
+qqline(model3@residuals / model3@sigma.t)
+
+summary(model3)
+```
+
+The summary shows no autocorrelation between residuals. The qq plot also shows the t-distribution fits the innovation well. Although there is a bit skewness in residual, the shape parameter does good balance. The significance level of parameters show all parameters are useful for the model, as the p-values are just a bit above 0.1.
+
+## (2)
+
+```{r}
+predict_argarch = predict(model3,n.ahead = 1)
+1 - exp(predict_argarch$meanForecast + qt(0.005,df = model3@fit$matcoef[7]) * predict_argarch$standardDeviation)
+```
+
+
+
+
+
+
+
+
+
+
+

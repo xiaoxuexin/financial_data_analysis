@@ -1,0 +1,86 @@
+---
+title: "STATS509_HW7"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+## 2(a)
+```{r}
+n = 300 
+xt = c(0:(n - 1))
+eps = rnorm(n, 0, 0.4)
+x = cumsum(eps)
+y = eps
+alpha1 = 0.4
+alpha2 = 0.4
+for (i in c(3:n)) {
+  y[i] = alpha1*y[i-1] + alpha2*y[i-2] + eps[i]
+}
+plot(y, type = 'l', xlab = 'time', ylab = 'y')
+abline(h = 0)
+```
+
+```{r}
+n = 300 
+xt = c(0:(n - 1))
+eps = rnorm(n, 0, 0.4)
+x = cumsum(eps)
+y = eps
+alpha1 = 0.4
+alpha2 = 0.4
+for (i in c(3:n)) {
+  y[i] = alpha1*y[i-1] + alpha2*y[i-2] + eps[i]
+}
+plot(y, type = 'l', xlab = 'time', ylab = 'y')
+abline(h = 0)
+```
+
+```{r}
+n = 300 
+xt = c(0:(n - 1))
+eps = rnorm(n, 0, 0.4)
+x = cumsum(eps)
+y = eps
+alpha1 = 0.4
+alpha2 = 0.4
+for (i in c(3:n)) {
+  y[i] = alpha1*y[i-1] + alpha2*y[i-2] + eps[i]
+}
+plot(y, type = 'l', xlab = 'time', ylab = 'y')
+abline(h = 0)
+```
+
+## (b)
+
+```{r}
+set.seed(45678)
+acf(y, lag = 10)
+acf(y, lag = 10, type = 'partial')
+```
+
+From the ACF plot, we can see that there is correlation between different y(t), and the effect of y(t) with more lag is slighter than smaller lag. So it make sense to use AR model.
+From the partial ACF plot, we can see that it is proper to choose AR(2) model, since partial acf is out of the boundary at lag 2.
+
+
+## (3)
+
+
+```{r}
+yy = acf(y, lag = 7, type = c('covariance'), plot = FALSE)
+r = rep(0, 8)
+# By Yule Walker equations, we can solve r(0), r(1), and r(2).
+r[1] = 12/35
+r[2] = 8/35
+r[3] = 8/35
+for (i in c(4:8)) {
+  r[i] = alpha1 * r[i-1] + alpha2 * r[i-2]
+}
+#true values
+r
+# estimation of autocorrelation
+new_y = yy$acf
+new_y
+plot(r, new_y)
+```
+
+The above numbers are true values and estimate values of the auto-covariance for lags h= 0,1,2,3,4,5,6,7, respectively. The plot of estimation results vs. the true values suggests that estimation values are smaller than the true values.

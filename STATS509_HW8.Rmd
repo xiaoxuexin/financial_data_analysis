@@ -1,0 +1,62 @@
+---
+title: "STATS509_HW8"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+
+```{r}
+library(Ecdat)
+data("CRSPday")
+crsp = CRSPday[,7]
+arima1 = arima(crsp, order = c(1,0,0))
+arima1
+arima2 = arima(crsp, order = c(2,0,0))
+arima2
+```
+
+Since the AIC of AR(1) is less than AR(2), I prefer AR(1) model.
+
+```{r}
+low = arima1$coef[1] + sqrt(arima1$var.coef[1,1])*qnorm(0.025)
+up = arima1$coef[1] + sqrt(arima1$var.coef[1,1])*qnorm(0.975)
+low
+up
+```
+
+The 95% confidence interval of alpha in AR(1) is (0.04646222, 0.1241414)
+
+
+```{r}
+tsdiag(arima1)
+tsdiag(arima2)
+```
+
+From diagnostic plots, we can see that there is slight difference between two models, so adding a lag doesn't improve the model much. We still prefer AR(1). We can also see the residuals of two models are almost white noise and stationary. 
+
+```{r}
+myqqnorm <- function(x){
+  qqnorm(x)
+  qqline(x)
+}
+myqqnorm(arima1$residuals)
+myqqnorm(arima2$residuals)
+```
+
+From QQ-plots, we can see that the residuals of two models are heavy-tail relative to normal distribution which may conflict with assumption that the residuals are normal distributed.
+
+
+```{r}
+library(forecast)
+MA = auto.arima(crsp, seasonal = FALSE, max.p = 5, max.q = 5, ic = 'aic')
+MA
+tsdiag(MA)
+myqqnorm(MA$residuals)
+```
+
+Using AIC criteria, we choose MA(1) model to fit the data. From the QQ-plot, we can see that the residuals are heavy-tail relative to normal distribution. From the diagnostic plots, we can see that there is little difference between MA(1) and AR(1), AR(2), but the AIC of MA(1) is a little less than AR(1) and AR(2).
+
+
+
+
+

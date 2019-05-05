@@ -1,0 +1,198 @@
+---
+title: "STATS509_HW2"
+author: "Xiaoxue Xin"
+date: "4876 5091"
+output: word_document
+---
+
+```{r, include=FALSE}
+qdexp <- function(p,mu,lambda){
+  quant1 <- qexp(0*p,lambda) + mu
+  pn <- p[p<.5]
+  pp <- p[p>.5]
+  quant1[p>.5] <- qexp(2*pp-1,lambda) + mu
+  quant1[p<.5] <- -qexp(1-2*pn,lambda) + mu
+  quant1 
+}  
+rdexp <- function(n,mu,lambda){
+  rexp <- rexp(n,lambda)
+  rbin <- 2*rbinom(n,1,.5)-1
+  x <- rexp*rbin+mu
+}
+```
+
+##1.(a)
+
+```{r}
+dat = read.csv("Nasdaq_daily_Jan1_2012_Dec31_2017.csv", header = TRUE)
+n = dim(dat)[1]
+time = 1:n
+log_return =log(dat$Adj.Close[2:n]/dat$Adj.Close[1:(n-1)])
+mean(log_return)
+sd(log_return)
+quantile = qdexp(0.005,mean(log_return),sqrt(2)/sd(log_return))
+quantile
+logretnqua = quantile(log_return,0.005)
+logretnqua
+```
+
+From the above result, we know that the mean and standard deviation of log-returns are 0.0006352362 and 0.008922481. With these parameters, the estimated relative VaR is 0.02841946. The relative VaR by using the 0.005-quantile of the log-returns is 0.03025071. There is little difference between these two relative VaR. The relative VaR under double exponential distribution is slightly greater than the VaR under quantile.
+
+## (b)
+
+```{r}
+set.seed(2015)
+niter = 10000
+exp_shortfall = rep(0,niter)
+for (i in 1:niter){
+  simu_logre = rdexp(1508, mean(log_return), sqrt(2)/sd(log_return))
+  below = which(simu_logre < quantile)
+  exp_shortfall[i] = mean (simu_logre[below])
+}
+mean(na.omit(exp_shortfall))*(1e7)
+```
+By using Monte-Carlo simulation, the estimate of expected shortfall is 347504.2.
+
+## (c)
+
+```{r}
+index0 = which(log_return < 0)
+index1 = which(log_return > 0)
+m = mean(log_return[index0])
+n = length(index0)
+new_exp = rexp(n, rate = -1/m)
+newl = rep(0,length(log_return))
+newl[1:n] = -(new_exp)
+newl[(n+1):length(log_return)] = log_return[index1]
+quan = quantile(newl,0.005)
+quan
+```
+
+From the above result, the relative VaR is 0.02764916 under one-sided exponential distribution, which is slightly greater than relative VaR in log-return.
+
+```{r}
+set.seed(2015)
+niter = 10000
+exp_shortfall1 = rep(0,niter)
+for (i in 1:niter){
+  simu_logre1 = rexp(n, -1/m)
+  below1 = which(-simu_logre1 < quan)
+  exp_shortfall1[i] = mean (simu_logre1[below1])
+}
+mean(na.omit(exp_shortfall1))*(1e7)
+```
+
+The expected shortfall is 350338.3.
+
+## 2.(1)
+
+```{r}
+data_ford = read.csv("ford.csv",header = TRUE)
+ford_return = data_ford[,3]
+return_mean = mean(ford_return)
+return_mean
+return_median = median(ford_return)
+return_median
+return_sd = sd(ford_return)
+return_sd
+```
+
+From the result, we can see that the sample mean is 0.0007600789. The sample median is 0. And the standard deviation is 0.01831557.
+
+## (2)
+```{r}
+qqnorm(ford_return)
+qqline(ford_return)
+```
+
+From the plot, we can see that the returns are not normally distributed. They are heavy-tail compared with normal distributed.
+
+## (3)
+```{r}
+shapiro.test(ford_return)
+```
+
+By using Shapiro-Wilk test, the p-value is less than 2.2e-16. And we reject the null hypothesis at 0.01. Since the null hypothesis is that the data is normally distributed, we can get the conclusion that the returns are not normally distributed.
+
+## (4)
+```{r}
+par(mfrow=c(1,2))
+
+qqplot(rt(2000,df=4), ford_return, main="t(4) Q-Q Plot", 
+       ylab="Sample Quantiles")
+qqline(ford_return)
+
+qqplot(rt(2000,df=5), ford_return, main="t(5) Q-Q Plot", 
+       ylab="Sample Quantiles")
+qqline(ford_return)
+
+par(mfrow=c(1,2))
+
+qqplot(rt(2000,df=6), ford_return, main="t(6) Q-Q Plot", 
+       ylab="Sample Quantiles")
+qqline(ford_return)
+
+qqplot(rt(2000,df=7), ford_return, main="t(7) Q-Q Plot", 
+       ylab="Sample Quantiles")
+qqline(ford_return)
+
+par(mfrow=c(1,2))
+
+qqplot(rt(2000,df=8), ford_return, main="t(8) Q-Q Plot", 
+       ylab="Sample Quantiles")
+qqline(ford_return)
+
+qqplot(rt(2000,df=10), ford_return, main="t(10) Q-Q Plot", 
+       ylab="Sample Quantiles")
+qqline(ford_return)
+```
+
+When df = 7, the plot is as linear as possible. From my perspective, we should ignore the return on Black Monday when looking for the best choices of df. Since t-model implies that the Black Monday was extremely unlikely, we should ignore it. On the other hand, there are two reasons why t-model does not give credible probability of extreme negtive return. First, the t-model is symmetric, but the return distribution appears to have skewness in left tail, which makes extreme negative returns more likely than under t-model. Second, t-model assumes constant conditional volatility, which may not be true in reality.
+
+## (5)
+```{r}
+q = 0.5
+n = length(ford_return)
+dens = density(ford_return,from = return_median, to = return_median, n = 1, kernel = c("gaussian"))$y
+variance = q*(1-q)/(n*(dens)^2)
+stderr = sqrt(variance)
+stderr
+stderrmean = sd(ford_return)/sqrt(n)
+stderrmean
+```
+From the result, we can see that the standard error of the sample median is 0.0004285607. The standard error of the sample mean is 0.0004095486. And the standard error of the sample median is a little larger than the standard error of the sample mean.
+
+
+## 3(2)
+
+```{r}
+b = 0.1
+x = seq(-5,5,by = 0.01)
+Bias = (pnorm(x+b*3.464/2,0,1) - pnorm(x-b*3.464/2,0,1))/b/3.464 - dnorm(x,0,1)
+plot(x, Bias, main = 'bias of KDE b=0.1')
+summary(x[which(Bias < 0)])
+```
+
+From the above result, for b = 0.1, when x in [-1,1], the bias is negative, otherwise it is positive.
+
+```{r}
+b = 0.2
+x = seq(-5,5,by = 0.01)
+Bias = (pnorm(x+b*3.464/2,0,1) - pnorm(x-b*3.464/2,0,1))/b/3.464 - dnorm(x,0,1)
+plot(x, Bias, main = 'bias of KDE b=0.2')
+summary(x[which(Bias < 0)])
+```
+
+From the above result, for b = 0.2, when x in [-1,1], the bias is negative, otherwise it is positive.
+
+```{r}
+b = 0.4
+x = seq(-5,5,by = 0.01)
+Bias = (pnorm(x+b*3.464/2,0,1) - pnorm(x-b*3.464/2,0,1))/b/3.464 - dnorm(x,0,1)
+plot(x, Bias, main = 'bias of KDE b=0.4')
+summary(x[which(Bias < 0)])
+```
+
+From the above result, for b = 0.4, when x in [-1.02,1.02], the bias is negative, otherwise it is positive.
+
+When the bandwidth is greater, the bias is greater.
